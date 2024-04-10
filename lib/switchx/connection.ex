@@ -67,7 +67,7 @@ defmodule SwitchX.Connection do
   end
 
   defp post_init(data) do
-    Logger.info("SwitchX #{inspect self()} Starting.")
+    Logger.info("SwitchX #{inspect(self())} Starting.")
     :telemetry.execute([:switchx, :connection, data.connection_mode], %{value: 1}, %{})
   end
 
@@ -111,6 +111,7 @@ defmodule SwitchX.Connection do
     case content_type do
       "text/disconnect-notice" ->
         handle_event(:disconnect, event, state, data)
+
       ^content_type ->
         apply(__MODULE__, state, [:event, event, data])
     end
@@ -259,7 +260,7 @@ defmodule SwitchX.Connection do
   end
 
   def ready(:call, {:bgapi, args}, from, data) do
-    #job_uuid = UUID.uuid4()
+    # job_uuid = UUID.uuid4()
     :gen_tcp.send(data.socket, "bgapi #{args}\n\n")
     data = put_in(data.commands_sent, :queue.in(from, data.commands_sent))
     {:keep_state, data}
@@ -350,7 +351,7 @@ defmodule SwitchX.Connection do
   @impl true
   def terminate(reason, _state, data) do
     :telemetry.execute([:switchx, :connection, data.connection_mode], %{value: -1}, %{})
-    Logger.info("SwitchX #{inspect self()} Finishing. #{inspect reason}")
+    Logger.info("SwitchX #{inspect(self())} Finishing. #{inspect(reason)}")
     :ok
   end
 

@@ -13,7 +13,7 @@ defmodule SwitchX.Connection.Socket do
 
     # case :gen_tcp.recv(socket, 0) do
     case :gen_tcp.recv(socket, 0, 1_000) do
-      #Socket has closed, parsing data until now
+      # Socket has closed, parsing data until now
       {:error, :closed} ->
         # Logger.info("SwitchXSock closed with payload: #{inspect payload}")
         SwitchX.Event.new(payload)

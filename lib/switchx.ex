@@ -45,7 +45,8 @@ defmodule SwitchX do
   def auth(conn, password),
     do: auth(conn, password, @timeout)
 
-  @spec auth(conn :: pid(), password :: String.t(), timeout :: non_neg_integer()) :: {:ok, term} | {:error, term}
+  @spec auth(conn :: pid(), password :: String.t(), timeout :: non_neg_integer()) ::
+          {:ok, term} | {:error, term}
   def auth(conn, password, timeout),
     do: safe_gen_call(conn, {:auth, password}, timeout)
 
@@ -85,7 +86,8 @@ defmodule SwitchX do
   def bg_api(conn, args),
     do: bg_api(conn, args, @timeout)
 
-  @spec bg_api(conn :: pid(), args :: String.t(), timeout :: non_neg_integer()) :: {:ok, event :: SwitchX.Event}
+  @spec bg_api(conn :: pid(), args :: String.t(), timeout :: non_neg_integer()) ::
+          {:ok, event :: SwitchX.Event}
   def bg_api(conn, args, timeout),
     do: safe_gen_call(conn, {:bgapi, args}, timeout)
 
@@ -172,7 +174,7 @@ defmodule SwitchX do
           event :: SwitchX.Event,
           event_uuid :: nil | String.t(),
           timeout :: non_neg_integer()
-        ) ::  {:ok, term} | :error
+        ) :: {:ok, term} | :error
   def send_event(conn, event_name, event, event_uuid, timeout) do
     safe_gen_call(conn, {:sendevent, event_name, event, event_uuid}, timeout)
   end
@@ -199,7 +201,12 @@ defmodule SwitchX do
     send_message(conn, nil, event, @timeout)
   end
 
-  @spec send_message(conn :: pid(), uuid :: nil | String.t(), event :: SwitchX.Event, timeout :: non_neg_integer()) :: {:ok, term}
+  @spec send_message(
+          conn :: pid(),
+          uuid :: nil | String.t(),
+          event :: SwitchX.Event,
+          timeout :: non_neg_integer()
+        ) :: {:ok, term}
   def send_message(conn, uuid, event, timeout) do
     safe_gen_call(conn, {:sendmsg, uuid, event}, timeout)
   end
@@ -244,7 +251,8 @@ defmodule SwitchX do
   The 'myevents' subscription allows your inbound socket connection to behave like an outbound socket connect.
   It will "lock on" to the events for a particular uuid and will ignore all other events
   """
-  @spec my_events(conn :: pid(), uuid :: nil | String.t(), timeout :: non_neg_integer()) :: :ok | {:error, term}
+  @spec my_events(conn :: pid(), uuid :: nil | String.t(), timeout :: non_neg_integer()) ::
+          :ok | {:error, term}
   def my_events(conn, uuid, timeout),
     do: safe_gen_call(conn, {:myevents, uuid}, timeout)
 
@@ -366,7 +374,8 @@ defmodule SwitchX do
   defp safe_gen_call(conn, command, timeout) do
     try do
       :gen_statem.call(conn, command, timeout)
-    rescue
+    catch
+      :exit, err -> err
       err -> err
     end
   end
