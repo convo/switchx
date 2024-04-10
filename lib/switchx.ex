@@ -366,7 +366,7 @@ defmodule SwitchX do
   defp safe_gen_call(conn, command, timeout) do
     try do
       :gen_statem.call(conn, command, timeout)
-    catch
+    rescue
       err -> err
     end
   end
