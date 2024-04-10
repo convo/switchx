@@ -18,8 +18,13 @@ defmodule SwitchX do
       iex> SwitchX.linger(context.conn)
       {:ok, "Lingering"}
   """
-  @spec linger(conn :: Pid) :: term
-  def linger(conn), do: :gen_statem.call(conn, {:linger})
+  @spec linger(conn :: pid()) :: term
+  def linger(conn),
+    do: linger(conn, @timeout)
+
+  @spec linger(conn :: pid(), timeout :: non_neg_integer()) :: term
+  def linger(conn, timeout),
+    do: safe_gen_call(conn, {:linger}, timeout)
 
   @doc """
   Reply the auth/request package from FreeSWITCH.
@@ -36,13 +41,13 @@ defmodule SwitchX do
       iex> SwitchX.auth(conn, "Incorrect")
       {:error, "Denied"}
   """
-  @spec auth(conn :: Pid, password :: String) :: {:ok, term} | {:error, term}
+  @spec auth(conn :: pid(), password :: String.t()) :: {:ok, term} | {:error, term}
   def auth(conn, password),
     do: auth(conn, password, @timeout)
 
-  @spec auth(conn :: Pid, password :: String, timeout :: non_neg_integer()) :: {:ok, term} | {:error, term}
+  @spec auth(conn :: pid(), password :: String.t(), timeout :: non_neg_integer()) :: {:ok, term} | {:error, term}
   def auth(conn, password, timeout),
-    do: :gen_statem.call(conn, {:auth, password}, timeout)
+    do: safe_gen_call(conn, {:auth, password}, timeout)
 
   @doc """
   Send a FreeSWITCH API command.
@@ -63,13 +68,26 @@ defmodule SwitchX do
         headers: %{"Content-Length" => "4", "Content-Type" => "api/response"}
       }
   """
-  @spec api(conn :: Pid, args :: String) :: {:ok, term}
+  @spec api(conn :: pid(), args :: String.t()) :: {:ok, term}
   def api(conn, args),
     do: api(conn, args, @timeout)
 
-  @spec api(conn :: Pid, args :: String, timeout :: non_neg_integer()) :: {:ok, term}
+  @spec api(conn :: pid(), args :: String.t(), timeout :: non_neg_integer()) :: {:ok, term}
   def api(conn, args, timeout),
-    do: :gen_statem.call(conn, {:api, args}, timeout)
+    do: safe_gen_call(conn, {:api, args}, timeout)
+
+  @doc """
+  Send a FreeSWITCH API command, non-blocking mode.
+  This will let you execute a job in the background, and the result will be sent as an BACKGROUND_JOB event
+  with an indicated UUID to match the reply to the command.
+  """
+  @spec bg_api(conn :: pid(), args :: String.t()) :: {:ok, event :: SwitchX.Event}
+  def bg_api(conn, args),
+    do: bg_api(conn, args, @timeout)
+
+  @spec bg_api(conn :: pid(), args :: String.t(), timeout :: non_neg_integer()) :: {:ok, event :: SwitchX.Event}
+  def bg_api(conn, args, timeout),
+    do: safe_gen_call(conn, {:bgapi, args}, timeout)
 
   @doc """
   Enable or disable events by class or all.
@@ -84,8 +102,13 @@ defmodule SwitchX do
       iex> SwitchX.listen_event(conn, "BACKGROUND_JOB")
       {:ok, %SwitchX.Event{}}
   """
-  @spec listen_event(conn :: Pid, event_name :: String) :: :ok
-  def listen_event(conn, event_name), do: :gen_statem.call(conn, {:listen_event, event_name})
+  @spec listen_event(conn :: pid(), event_name :: String.t()) :: :ok
+  def listen_event(conn, event_name),
+    do: listen_event(conn, event_name, @timeout)
+
+  @spec listen_event(conn :: pid(), event_name :: String.t(), timeout :: non_neg_integer()) :: :ok
+  def listen_event(conn, event_name, timeout),
+    do: safe_gen_call(conn, {:listen_event, event_name}, timeout)
 
   @doc """
   Send an event into the event system (multi line input for headers).
@@ -106,8 +129,13 @@ defmodule SwitchX do
       iex> SwitchX.filter(conn, "Event-Name CHANNEL_EXECUTE")
       {:ok, %SwitchX.Event{}}
   """
-  @spec filter(conn :: Pid, args :: String) :: {:ok, any()}
-  def filter(conn, args), do: :gen_statem.call(conn, {:filter, args})
+  @spec filter(conn :: pid(), args :: String.t()) :: {:ok, any()}
+  def filter(conn, args),
+    do: filter(conn, args, @timeout)
+
+  @spec filter(conn :: pid(), args :: String.t(), timeout :: non_neg_integer()) :: {:ok, any()}
+  def filter(conn, args, timeout),
+    do: safe_gen_call(conn, {:filter, args}, timeout)
 
   @doc """
   Send an event into the event system (multi line input for headers).
@@ -133,19 +161,20 @@ defmodule SwitchX do
       SwitchX.send_event(conn, "SEND_INFO", event)
       {:ok, response}
   """
-  @spec send_event(conn :: Pid, event_name :: String, event :: SwitchX.Event) :: {:ok, term}
+  @spec send_event(conn :: pid(), event_name :: String.t(), event :: SwitchX.Event) :: {:ok, term}
   def send_event(conn, event_name, event) do
-    send_event(conn, event_name, event, nil)
+    send_event(conn, event_name, event, nil, @timeout)
   end
 
   @spec send_event(
-          conn :: Pid,
-          event_name :: String,
+          conn :: pid(),
+          event_name :: String.t(),
           event :: SwitchX.Event,
-          event_uuid :: String
-        ) :: :ok | :error
-  def send_event(conn, event_name, event, event_uuid) do
-    :gen_statem.call(conn, {:sendevent, event_name, event, event_uuid})
+          event_uuid :: nil | String.t(),
+          timeout :: non_neg_integer()
+        ) ::  {:ok, term} | :error
+  def send_event(conn, event_name, event, event_uuid, timeout) do
+    safe_gen_call(conn, {:sendevent, event_name, event, event_uuid}, timeout)
   end
 
   @doc """
@@ -165,12 +194,14 @@ defmodule SwitchX do
         SwitchX.send_message(conn, uuid, message)
         {:ok, event}
   """
-  @spec send_message(conn :: Pid, event :: SwitchX.Event) :: {:ok, term}
-  def send_message(conn, event), do: send_message(conn, nil, event)
+  @spec send_message(conn :: pid(), event :: SwitchX.Event) :: {:ok, term}
+  def send_message(conn, event) do
+    send_message(conn, nil, event, @timeout)
+  end
 
-  @spec send_message(conn :: Pid, uuid :: String, event :: SwitchX.Event) :: {:ok, term}
-  def send_message(conn, uuid, event) do
-    :gen_statem.call(conn, {:sendmsg, uuid, event})
+  @spec send_message(conn :: pid(), uuid :: nil | String.t(), event :: SwitchX.Event, timeout :: non_neg_integer()) :: {:ok, term}
+  def send_message(conn, uuid, event, timeout) do
+    safe_gen_call(conn, {:sendmsg, uuid, event}, timeout)
   end
 
   @doc """
@@ -180,44 +211,47 @@ defmodule SwitchX do
 
       iex> SwitchX.execute(conn, uuid, "playback", "ivr/ivr-welcome_to_freeswitch.wav")
   """
-  @spec execute(conn :: Pid, uuid :: String, application :: String, args :: String) ::
+  @spec execute(conn :: pid(), String.t(), application :: String.t(), args :: String.t()) ::
           event :: SwitchX.Event
   def execute(conn, uuid, application, args) do
-    execute(conn, uuid, application, args, SwitchX.Event.new())
+    execute(conn, uuid, application, args, SwitchX.Event.new(), @timeout)
   end
 
   @spec execute(
-          conn :: Pid,
-          uuid :: String,
-          application :: String,
-          args :: String,
-          event :: SwitchX.Event
+          conn :: pid(),
+          uuid :: String.t(),
+          application :: String.t(),
+          args :: String.t(),
+          event :: SwitchX.Event,
+          timeout :: non_neg_integer()
         ) :: event :: SwitchX.Event
-  def execute(conn, uuid, application, arg, event) do
+  def execute(conn, uuid, application, arg, event, timeout) do
     event = put_in(event.headers, Map.put(event.headers, "call-command", "execute"))
     event = put_in(event.headers, Map.put(event.headers, "execute-app-name", application))
     event = put_in(event.headers, Map.put(event.headers, "execute-app-arg", arg))
     event = put_in(event.headers, Map.put(event.headers, "Event-UUID", UUID.uuid4()))
-    send_message(conn, uuid, event)
+    send_message(conn, uuid, event, timeout)
   end
 
   @doc """
   The 'myevents' subscription allows your socket to receive all related events from a outbound socket session
   """
-  @spec my_events(conn :: Pid) :: :ok | {:error, term}
-  def my_events(conn), do: my_events(conn, nil)
+  @spec my_events(conn :: pid()) :: :ok | {:error, term}
+  def my_events(conn),
+    do: my_events(conn, nil, @timeout)
 
   @doc """
   The 'myevents' subscription allows your inbound socket connection to behave like an outbound socket connect.
   It will "lock on" to the events for a particular uuid and will ignore all other events
   """
-  @spec my_events(conn :: Pid, uuid :: String) :: :ok | {:error, term}
-  def my_events(conn, uuid), do: :gen_statem.call(conn, {:myevents, uuid})
+  @spec my_events(conn :: pid(), uuid :: nil | String.t(), timeout :: non_neg_integer()) :: :ok | {:error, term}
+  def my_events(conn, uuid, timeout),
+    do: safe_gen_call(conn, {:myevents, uuid}, timeout)
 
   @doc """
   Closes the socket connection.
   """
-  @spec exit(conn :: Pid) :: :ok | {:error, term}
+  @spec exit(conn :: pid()) :: :ok | {:error, term}
   def exit(conn) do
     case :gen_statem.call(conn, {:exit}) do
       {:ok, event} ->
@@ -242,20 +276,20 @@ defmodule SwitchX do
   @doc """
     Closes the connection (conn) and stop the socket
   """
-  @spec close(conn :: Pid) :: :ok | {:error, term}
+  @spec close(conn :: pid()) :: :ok | {:error, term}
   def close(conn) do
     __MODULE__.exit(conn)
-    :gen_statem.call(conn, {:close})
+    _ok = safe_gen_call(conn, {:close}, @timeout)
     :gen_statem.stop(conn, :normal, 1_000)
   end
 
   @doc """
   Hang up the call with a hangup_cause.
   """
-  @spec hangup(conn :: Pid, cause :: String) :: :ok | {:error, term}
+  @spec hangup(conn :: pid(), cause :: String.t()) :: :ok | {:error, term}
   def hangup(conn, hangup_cause), do: hangup(conn, nil, hangup_cause)
 
-  @spec hangup(conn :: Pid, uuid :: String, cause :: String) :: :ok | {:error, term}
+  @spec hangup(conn :: pid(), uuid :: String.t(), cause :: String.t()) :: :ok | {:error, term}
   def hangup(conn, uuid, hangup_cause) do
     message =
       SwitchX.Event.Headers.new(%{
@@ -264,7 +298,7 @@ defmodule SwitchX do
       })
       |> SwitchX.Event.new()
 
-    {:ok, event} = send_message(conn, uuid, message)
+    {:ok, event} = send_message(conn, uuid, message, @timeout)
 
     reply =
       event.headers["Reply-Text"]
@@ -276,14 +310,6 @@ defmodule SwitchX do
       ["+OK"] -> :ok
     end
   end
-
-  @doc """
-  Send a FreeSWITCH API command, non-blocking mode.
-  This will let you execute a job in the background, and the result will be sent as an BACKGROUND_JOB event
-  with an indicated UUID to match the reply to the command.
-  """
-  @spec bg_api(conn :: Pid, args :: String.Chars) :: {:ok, event :: SwitchX.Event}
-  def bg_api(conn, args), do: :gen_statem.call(conn, {:bgapi, args})
 
   def originate(conn, aleg, bleg, :expand) do
     originate(conn, "#{aleg} #{bleg}", :expand)
@@ -312,9 +338,10 @@ defmodule SwitchX do
   def playback(conn, file), do: playback(conn, file, nil)
 
   def playback(conn, file, uuid) do
-    SwitchX.execute(conn, uuid, "playback", file)
+    execute(conn, uuid, "playback", file)
   end
 
+  @spec playback_async(any(), any()) :: {:ok, pid()}
   def playback_async(conn, file), do: playback_async(conn, file, nil)
 
   def playback_async(conn, file, uuid) do
@@ -333,6 +360,14 @@ defmodule SwitchX do
       ["-ERR", term] -> {:error, term}
       ["+OK", uuid] -> {:ok, uuid}
       _ -> {:error, :unknown}
+    end
+  end
+
+  defp safe_gen_call(conn, command, timeout) do
+    try do
+      :gen_statem.call(conn, command, timeout)
+    catch
+      err -> err
     end
   end
 end
