@@ -113,6 +113,27 @@ defmodule SwitchX do
     do: safe_gen_call(conn, {:listen_event, event_name}, timeout)
 
   @doc """
+  disable listening events.
+
+  Returns
+  ```
+    :ok
+  ```
+
+  ## Examples
+
+      iex> SwitchX.noevents(conn)
+      {:ok, %SwitchX.Event{}}
+  """
+  @spec noevents(conn :: pid()) :: :ok
+  def noevents(conn),
+    do: noevents(conn, @timeout)
+
+  @spec noevents(conn :: pid(), timeout :: non_neg_integer()) :: :ok
+  def noevents(conn, timeout),
+    do: safe_gen_call(conn, {:noevents}, timeout)
+
+  @doc """
   Send an event into the event system (multi line input for headers).
   ```
   sendevent <event-name>
