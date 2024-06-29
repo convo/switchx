@@ -185,6 +185,12 @@ defmodule SwitchX.Connection do
     {:keep_state, data}
   end
 
+  def ready(:call, {:noevents}, from, data) do
+    :gen_tcp.send(data.socket, "noevents\n\n")
+    data = put_in(data.commands_sent, :queue.in(from, data.commands_sent))
+    {:keep_state, data}
+  end
+
   def ready(:call, {:sendevent, event_name, event, event_uuid}, from, data) do
     event =
       case event_uuid do
