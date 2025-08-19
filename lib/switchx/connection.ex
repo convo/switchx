@@ -130,7 +130,8 @@ defmodule SwitchX.Connection do
       _disposition ->
         Logger.info("Disconnect received, closing socket.")
         :gen_tcp.close(data.socket)
-        {:stop, :disconnected}
+        send(data.owner, {:switchx_event, :disconnected})
+        :stop
     end
   end
 
