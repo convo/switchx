@@ -32,6 +32,10 @@ defmodule SwitchX.Connection do
     :gen_statem.start_link(__MODULE__, [session_module, socket, :outbound], [])
   end
 
+  def stop(pid, reason \\ :normal) do
+    :gen_statem.stop(pid, reason, 5000)
+  end
+
   @impl true
   def init([owner, socket, :inbound]) when is_port(socket) do
     {:ok, {host, port}} = :inet.peername(socket)
@@ -77,7 +81,8 @@ defmodule SwitchX.Connection do
   def handle_event({:call, from}, {:close}, _state, data) do
     :gen_tcp.close(data.socket)
     :gen_statem.reply(from, :ok)
-    {:next_state, :disconnected, data}
+    # Changed from {:next_state, :disconnected, data}
+    {:stop, :normal, data}
   end
 
   def handle_event({:call, from}, message, state, data) do
@@ -93,6 +98,17 @@ defmodule SwitchX.Connection do
 
     :inet.setopts(data.socket, active: :once)
     {:next_state, :ready, data}
+  end
+
+  # Add TCP close/error handlers
+  def handle_event(:info, {:tcp_closed, _socket}, _state, data) do
+    Logger.info("SwitchX #{inspect(self())} Socket closed by remote")
+    {:stop, :normal, data}
+  end
+
+  def handle_event(:info, {:tcp_error, _socket, reason}, _state, data) do
+    Logger.error("SwitchX #{inspect(self())} Socket error: #{inspect(reason)}")
+    {:stop, {:error, reason}, data}
   end
 
   def handle_event(:info, {:tcp, _socket, "\n"}, _state, data) do
@@ -130,7 +146,8 @@ defmodule SwitchX.Connection do
       _disposition ->
         Logger.info("Disconnect received, closing socket.")
         :gen_tcp.close(data.socket)
-        {:stop, :disconnected}
+        # Changed from {:stop, :disconnected}
+        {:stop, :normal, data}
     end
   end
 
@@ -161,8 +178,6 @@ defmodule SwitchX.Connection do
 
   def ready(:call, {:api, args}, from, data) do
     data = put_in(data.api_calls, :queue.in(from, data.api_calls))
-    # api_cmd = "api #{args}\n\n"
-    # Logger.info("SwitchX Sending API command: #{inspect api_cmd}")
     :gen_tcp.send(data.socket, "api #{args}\n\n")
     {:keep_state, data}
   end
@@ -261,8 +276,9 @@ defmodule SwitchX.Connection do
 
   def ready(:call, {:exit}, from, data) do
     :gen_tcp.send(data.socket, "exit\n\n")
-    data = put_in(data.commands_sent, :queue.in(from, data.commands_sent))
-    {:keep_state, data}
+    :gen_statem.reply(from, :ok)
+    # Stop immediately after exit command
+    {:stop, :normal, data}
   end
 
   def ready(:call, {:bgapi, args}, from, data) do
@@ -356,13 +372,22 @@ defmodule SwitchX.Connection do
 
   @impl true
   def terminate(reason, _state, data) do
+    # Ensure socket is closed
+    if data.socket && :erlang.port_info(data.socket) != :undefined do
+      :gen_tcp.close(data.socket)
+    end
+
+    # Notify owner if still alive
+    if data.owner && Process.alive?(data.owner) do
+      send(data.owner, {:switchx_terminated, self(), reason})
+    end
+
     :telemetry.execute([:switchx, :connection, data.connection_mode], %{value: -1}, %{})
-    Logger.info("SwitchX #{inspect(self())} Finishing. #{inspect(reason)}")
+    Logger.info("SwitchX #{inspect(self())} Terminated. Reason: #{inspect(reason)}")
     :ok
   end
 
   ## HELPERS ##
-
   defp reply_from_queue(queue_name, response, data) do
     queue = Map.get(data, String.to_atom(queue_name))
 
