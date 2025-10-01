@@ -63,7 +63,10 @@ defmodule SwitchX.Connection.Outbound do
     case :gen_tcp.accept(state.listen_socket) do
       {:ok, socket} ->
         Logger.info("New connection from #{inspect(:inet.peername(socket))}")
-        {:ok, connection} = SwitchX.Connection.start_link(state.mod, socket, session_uuid, :outbound)
+
+        {:ok, connection} =
+          SwitchX.Connection.start_link(state.mod, socket, session_uuid, :outbound)
+
         :gen_tcp.controlling_process(socket, connection)
         run(state, session_uuid)
 
