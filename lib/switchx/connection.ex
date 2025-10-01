@@ -11,6 +11,7 @@ defmodule SwitchX.Connection do
     :password,
     :owner,
     :socket,
+    :session_uuid,
     :connection_mode,
     :api_response_buffer,
     :session_module,
@@ -24,20 +25,27 @@ defmodule SwitchX.Connection do
     :handle_event_function
   end
 
-  def start_link(owner, socket, :inbound) when is_port(socket) and is_pid(owner) do
-    :gen_statem.start_link(__MODULE__, [owner, socket, :inbound], [])
+  def start_link(owner, socket, session_uuid, :inbound) when is_port(socket) and is_pid(owner) do
+    :gen_statem.start_link(__MODULE__, [owner, socket, session_uuid, :inbound], [])
   end
 
-  def start_link(session_module, socket, :outbound) do
-    :gen_statem.start_link(__MODULE__, [session_module, socket, :outbound], [])
+  def start_link(session_module, socket, session_uuid, :outbound) do
+    :gen_statem.start_link(__MODULE__, [session_module, socket, session_uuid, :outbound], [])
   end
 
-  def stop(pid, reason \\ :normal) do
-    :gen_statem.stop(pid, reason, 5000)
+  @spec stop(atom() | pid() | {atom(), any()} | {:via, atom(), any()}, sess_uuid :: String.t()) :: :ok
+  def stop(pid, session_uuid, reason \\ :normal) do
+    Logger.info(
+      "SwitchX.Connection #{session_uuid} stop called for #{inspect(pid)} with reason: #{inspect(reason)}"
+    )
+
+    result = :gen_statem.stop(pid, reason, 5000)
+    Logger.info("SwitchX.Connection #{session_uuid} stop result: #{inspect(result)}")
+    result
   end
 
   @impl true
-  def init([owner, socket, :inbound]) when is_port(socket) do
+  def init([owner, socket, session_uuid, :inbound]) when is_port(socket) do
     {:ok, {host, port}} = :inet.peername(socket)
 
     data = %__MODULE__{
@@ -45,6 +53,7 @@ defmodule SwitchX.Connection do
       port: port,
       owner: owner,
       socket: socket,
+      session_uuid: session_uuid,
       connection_mode: :inbound
     }
 
@@ -53,7 +62,7 @@ defmodule SwitchX.Connection do
     {:ok, :connecting, data}
   end
 
-  def init([session_module, socket, :outbound]) when is_port(socket) do
+  def init([session_module, socket, session_uuid, :outbound]) when is_port(socket) do
     {:ok, {host, port}} = :inet.peername(socket)
 
     data = %__MODULE__{
@@ -61,6 +70,7 @@ defmodule SwitchX.Connection do
       port: port,
       owner: nil,
       socket: socket,
+      session_uuid: session_uuid,
       connection_mode: :outbound,
       session_module: session_module
     }
@@ -371,7 +381,7 @@ defmodule SwitchX.Connection do
   end
 
   @impl true
-  def terminate(reason, _state, data) do
+  def terminate(reason, %__MODULE__{session_uuid: session_uuid} = _state, data) do
     # Ensure socket is closed
     if data.socket && :erlang.port_info(data.socket) != :undefined do
       :gen_tcp.close(data.socket)
@@ -383,7 +393,7 @@ defmodule SwitchX.Connection do
     end
 
     :telemetry.execute([:switchx, :connection, data.connection_mode], %{value: -1}, %{})
-    Logger.info("SwitchX #{inspect(self())} Terminated. Reason: #{inspect(reason)}")
+    Logger.info("SwitchX #{session_uuid} #{inspect(self())} terminated reason: #{inspect(reason)}")
     :ok
   end
 
