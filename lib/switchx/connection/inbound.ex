@@ -28,10 +28,11 @@ defmodule SwitchX.Connection.Inbound do
   def start_link(opts) do
     host = Keyword.fetch!(opts, :host)
     port = Keyword.fetch!(opts, :port)
+    session_uuid = Keyword.get(opts, :session_uuid, nil)
 
     case perform_connect(host, port, @socket_opts, @timeout) do
       {:ok, socket} ->
-        {:ok, client} = SwitchX.Connection.start_link(self(), socket, @mode)
+        {:ok, client} = SwitchX.Connection.start_link(self(), socket, session_uuid, @mode)
         :gen_tcp.controlling_process(socket, client)
         {:ok, client}
 

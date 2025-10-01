@@ -1,7 +1,7 @@
 defmodule SwitchX.Connection.Outbound do
   @moduledoc """
   Outbound mode means you make a daemon, and then have FreeSWITCH connect to it.
-  You add an extension to the dialplan, and put <action application="socket" data="ip:port sync full"/> 
+  You add an extension to the dialplan, and put <action application="socket" data="ip:port sync full"/>
 
   In outbound mode, also known as the "socket application" (or socket client), FreeSWITCH makes outbound connections to another process
   (similar to Asterisk's FAGI model). Using outbound connections you can have FreeSWITCH call your own application(s) when particular events occur.
@@ -44,6 +44,7 @@ defmodule SwitchX.Connection.Outbound do
     mod = module
     bind_address = Keyword.fetch!(opts, :host)
     bind_port = Keyword.fetch!(opts, :port)
+    session_uuid = Keyword.get(opts, :session_uuid, nil)
 
     {:ok, listen_socket} = :gen_tcp.listen(bind_port, @socket_opts)
 
@@ -54,17 +55,17 @@ defmodule SwitchX.Connection.Outbound do
       mod: mod
     }
 
-    run(state)
+    run(state, session_uuid)
   end
 
   @doc false
-  def run(state) do
+  def run(state, session_uuid) do
     case :gen_tcp.accept(state.listen_socket) do
       {:ok, socket} ->
         Logger.info("New connection from #{inspect(:inet.peername(socket))}")
-        {:ok, connection} = SwitchX.Connection.start_link(state.mod, socket, :outbound)
+        {:ok, connection} = SwitchX.Connection.start_link(state.mod, socket, session_uuid, :outbound)
         :gen_tcp.controlling_process(socket, connection)
-        run(state)
+        run(state, session_uuid)
 
       _ ->
         :error
