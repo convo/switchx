@@ -33,7 +33,8 @@ defmodule SwitchX.Connection do
     :gen_statem.start_link(__MODULE__, [session_module, socket, session_uuid, :outbound], [])
   end
 
-  @spec stop(atom() | pid() | {atom(), any()} | {:via, atom(), any()}, sess_uuid :: String.t()) :: :ok
+  @spec stop(atom() | pid() | {atom(), any()} | {:via, atom(), any()}, sess_uuid :: String.t()) ::
+          :ok
   def stop(pid, session_uuid, reason \\ :normal) do
     Logger.info(
       "SwitchX.Connection #{session_uuid} stop called for #{inspect(pid)} with reason: #{inspect(reason)}"
@@ -381,19 +382,32 @@ defmodule SwitchX.Connection do
   end
 
   @impl true
-  def terminate(reason, %__MODULE__{session_uuid: session_uuid} = _state, data) do
+  def terminate(
+        reason,
+        _state,
+        %__MODULE__{
+          session_uuid: session_uuid,
+          owner: owner,
+          connection_mode: connection_mode,
+          socket: socket
+        } = data
+      ) do
     # Ensure socket is closed
-    if data.socket && :erlang.port_info(data.socket) != :undefined do
-      :gen_tcp.close(data.socket)
+    if socket && :erlang.port_info(socket) != :undefined do
+      :gen_tcp.close(socket)
     end
 
     # Notify owner if still alive
-    if data.owner && Process.alive?(data.owner) do
+    if owner && Process.alive?(owner) do
       send(data.owner, {:switchx_terminated, self(), reason})
     end
 
-    :telemetry.execute([:switchx, :connection, data.connection_mode], %{value: -1}, %{})
-    Logger.info("SwitchX #{session_uuid} #{inspect(self())} terminated reason: #{inspect(reason)}")
+    :telemetry.execute([:switchx, :connection, connection_mode], %{value: -1}, %{})
+
+    Logger.info(
+      "SwitchX #{session_uuid} #{inspect(self())} terminated reason: #{inspect(reason)}"
+    )
+
     :ok
   end
 
