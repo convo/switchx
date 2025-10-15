@@ -299,6 +299,12 @@ defmodule SwitchX.Connection do
     {:keep_state, data}
   end
 
+  def ready(:call, {:sched_api, args}, from, data) do
+    :gen_tcp.send(data.socket, "sched_api #{args}\n\n")
+    data = put_in(data.commands_sent, :queue.in(from, data.commands_sent))
+    {:keep_state, data}
+  end
+
   def disconnected(:call, _payload, from, data) do
     :gen_statem.reply(from, {:error, :disconnected})
     {:keep_state, data}

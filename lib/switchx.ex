@@ -92,6 +92,19 @@ defmodule SwitchX do
     do: safe_gen_call(conn, {:bgapi, args}, timeout)
 
   @doc """
+  Send a FreeSWITCH API postponed command.
+  This will let you execute a job in some seconds.
+  """
+  @spec sched_api(conn :: pid(), args :: String.t()) :: {:ok, event :: SwitchX.Event}
+  def sched_api(conn, args),
+    do: sched_api(conn, args, @timeout)
+
+  @spec sched_api(conn :: pid(), args :: String.t(), timeout :: non_neg_integer()) ::
+          {:ok, event :: SwitchX.Event}
+  def sched_api(conn, args, timeout),
+    do: safe_gen_call(conn, {:sched_api, args}, timeout)
+
+  @doc """
   Enable or disable events by class or all.
 
   Returns
